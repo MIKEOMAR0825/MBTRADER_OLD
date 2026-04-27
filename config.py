@@ -14,8 +14,8 @@ SYMBOLS = ["BTCUSDT", "AVAXUSDT", "XRPUSDT", "SOLUSDT"]  # ajoute ici d'autres s
 
 
 # 🧪 ENVIRONNEMENT
-USE_TESTNET = False
-AUTO_TRADING = True  # sécurité par défaut
+USE_TESTNET = True
+AUTO_TRADING = False  # sécurité par défaut
 
 
 # 💰 CAPITAL / RISK
@@ -49,4 +49,4 @@ MAX_POSITIONS_PER_SYMBOL = 1
 
 
 # Active le mode simulation pour tester le bot sans signal réel
-SIMULATE_TRADES = False
+SIMULATE_TRADES = True

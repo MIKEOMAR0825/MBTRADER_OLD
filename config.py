@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from sqlalchemy import false
 
 
 load_dotenv()
@@ -14,8 +15,10 @@ SYMBOLS = ["BTCUSDT", "AVAXUSDT", "XRPUSDT", "SOLUSDT"]  # ajoute ici d'autres s
 
 
 # 🧪 ENVIRONNEMENT
-USE_TESTNET = True
-AUTO_TRADING = False  # sécurité par défaut
+USE_TESTNET = False
+# Active le mode simulation pour tester le bot sans signal réel
+SIMULATE_TRADES = False
+AUTO_TRADING = True  # sécurité par défaut
 
 
 # 💰 CAPITAL / RISK
@@ -46,7 +49,3 @@ SCALP_SL = 0.002  # 0.2%
 
 # NOMBRE MAX DE TRADES SIMULTANES PAR CRYPTO
 MAX_POSITIONS_PER_SYMBOL = 1
-
-
-# Active le mode simulation pour tester le bot sans signal réel
-SIMULATE_TRADES = True

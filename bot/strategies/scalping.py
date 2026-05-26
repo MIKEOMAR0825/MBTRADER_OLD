@@ -7,10 +7,10 @@ def scalping_signal(df):
 
     print(f"📈 RSI={rsi:.2f}")
 
-    if rsi < 45:
+    if rsi < 35:
         return "BUY"
 
-    elif rsi > 55:
+    elif rsi > 65:
         return "SELL"
 
     return "HOLD"

@@ -13,23 +13,23 @@ SYMBOLS = ["BTCUSDT", "AVAXUSDT", "XRPUSDT", "SOLUSDT", "ETHUSDT", "BNBUSDT", "L
 
 # 🧪 ENVIRONNEMENT
 USE_TESTNET = True
-AUTO_TRADING = True  # sécurité par défaut
+AUTO_TRADING = False  # sécurité par défaut
 
 # 💰 CAPITAL / RISK
 RISK_PER_TRADE = 0.01       # 1% du capital par trade
-MAX_DRAWDOWN = 0.2           # 20% perte globale
+MAX_DRAWDOWN = 0.15           # 15% perte globale
 
 # 🛑 TRADES
 STOP_LOSS_PCT = 0.01        # -1%
 TAKE_PROFIT_PCT = 0.02       # +2%
 
 # ⏱ BOT
-LOOP_INTERVAL = 10            # secondes entre chaque analyse
+LOOP_INTERVAL = 5            # secondes entre chaque analyse
 MAX_TRADE_USDT = 20           # pour test uniquement
 
 # SCALPING
-SCALP_TP = 0.003  # 0.3%
-SCALP_SL = 0.002  # 0.2%
+SCALP_TP = 0.006  # 0.6%
+SCALP_SL = 0.003  # 0.3%
 
 # NOMBRE MAX DE TRADES SIMULTANES PAR CRYPTO
 MAX_POSITIONS_PER_SYMBOL = 1

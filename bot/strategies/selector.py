@@ -1,23 +1,12 @@
+# bot/strategies/selector.py
+
+
 def choose_strategy(df):
+    ema_fast = df['ema'].iloc[-1]
+    ema_slow = df['ema'].rolling(20).mean().iloc[-1]
 
-    ema_fast = df["ema"].iloc[-1]
-
-    # EMA slow réelle (plus stable que rolling mean)
-    ema_slow = df["close"].ewm(span=50, adjust=False).mean().iloc[-1]
-
-    # tendance directionnelle
-    trend_strength = abs(ema_fast - ema_slow) / ema_slow
-
-    # volatilité marché
-    volatility = df["close"].pct_change().std()
-
-    # -----------------------------
-    # TREND MODE
-    # -----------------------------
-    if trend_strength > 0.002 and volatility > 0.0003:
+    # marché en tendance
+    if ema_fast > ema_slow:
         return "TREND"
-
-    # -----------------------------
-    # SCALPING MODE
-    # -----------------------------
-    return "SCALPING"
+    else:
+        return "SCALPING"

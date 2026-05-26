@@ -37,13 +37,23 @@ def create_labels(df: pd.DataFrame, n_future: int = 5) -> pd.DataFrame:
     df['future_price'] = df['close'].shift(-n_future)
 
     def signal(row):
-        if row['future_price'] > row['close']:
-            return 1
-        elif row['future_price'] < row['close']:
-            return -1
-        else:
-            return 0
 
+        change_pct = (
+            (row['future_price'] - row['close'])
+            / row['close']
+        )
+
+        # BUY
+        if change_pct > 0.003:
+            return 1
+
+        # SELL
+        elif change_pct < -0.003:
+            return -1
+
+        # HOLD
+        return 0
+    
     df['target'] = df.apply(signal, axis=1)
     return df
 
@@ -76,23 +86,29 @@ def train_model(df: pd.DataFrame) -> RandomForestClassifier:
 # -----------------------------
 # Prédiction
 # -----------------------------
-def predict_signal(model: RandomForestClassifier, df: pd.DataFrame) -> str:
-    """
-    Retourne le signal 'BUY', 'SELL', ou 'HOLD'
-    """
+def predict_signal(model, df):
+
     latest = df.iloc[-1]
+
     X = pd.DataFrame([{
-    'rsi': latest['rsi'],
-    'macd': latest['macd'],
-    'macd_signal': latest['macd_signal'],
-    'ema': latest['ema']
-}])
-    
+        'rsi': latest['rsi'],
+        'macd': latest['macd'],
+        'macd_signal': latest['macd_signal'],
+        'ema': latest['ema']
+    }])
+
     pred = model.predict(X)[0]
-    prob = model.predict_proba(X).max()  # confiance max
-    
-    if pred == 1:
-        return "BUY" if prob > 0.6 else "HOLD"
-    elif pred == -1:
-        return "SELL" if prob > 0.6 else "HOLD"
+
+    probs = model.predict_proba(X)[0]
+    class_index = list(model.classes_).index(pred)
+    prob = probs[class_index]
+
+    print(f"📈 Prediction={pred} | Confidence={prob:.2f}")
+
+    if pred == 1 and prob > 0.55:
+        return "BUY"
+
+    elif pred == -1 and prob > 0.55:
+        return "SELL"
+
     return "HOLD"

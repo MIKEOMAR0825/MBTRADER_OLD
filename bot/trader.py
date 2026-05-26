@@ -1,3 +1,5 @@
+# bot/trader.py
+
 import os
 import pandas as pd
 from binance.enums import SIDE_BUY, SIDE_SELL
@@ -16,8 +18,8 @@ from services.market_data import get_latest_prices
 from services.binance_client import place_market_order, get_account_balance
 
 
-# 🔹 CONFIG
 SYMBOLS = config.SYMBOLS
+
 current_positions = {}
 
 MODEL_DIR = "models"
@@ -27,16 +29,16 @@ models = {}
 # LOAD MODELS
 # -----------------------------
 for symbol in SYMBOLS:
-    model_path = os.path.join(MODEL_DIR, f"model_{symbol}.pkl")
-    if os.path.exists(model_path):
-        models[symbol] = joblib.load(model_path)
-        print(f"✅ Model loaded {symbol}")
+    path = os.path.join(MODEL_DIR, f"model_{symbol}.pkl")
+    if os.path.exists(path):
+        models[symbol] = joblib.load(path)
+        print(f"✅ Modèle chargé pour {symbol}")
     else:
-        print(f"⚠️ Missing model {symbol}")
+        print(f"⚠️ Modèle manquant {symbol}")
 
 
 # -----------------------------
-# DATA
+# DATA PREP
 # -----------------------------
 def prepare_dataframe(prices: pd.Series) -> pd.DataFrame:
     df = add_indicators(prices)
@@ -58,7 +60,6 @@ def start_auto_trading():
 
         try:
             prices = get_latest_prices(symbol)
-
             if prices is None or prices.empty:
                 continue
 
@@ -75,150 +76,130 @@ def start_auto_trading():
 
             strategy = choose_strategy(df)
 
-            signal = (
-                predict_signal(models[symbol], df)
-                if strategy == "TREND"
-                else scalping_signal(df)
-            )
+            if strategy == "TREND":
+                signal = predict_signal(models[symbol], df)
+            else:
+                signal = scalping_signal(df)
 
             print(f"📊 {symbol} | {strategy} | {price:.2f} | {signal}")
 
-            if symbol in current_positions:
-                check_exit(symbol, price)
+            check_exit(symbol, price)
 
             if len(current_positions.get(symbol, [])) >= config.MAX_POSITIONS_PER_SYMBOL:
                 continue
 
             if signal == "BUY":
-                open_buy(symbol, price)
-
+                open_buy(symbol, price, strategy)
             elif signal == "SELL":
-                open_sell(symbol, price)
+                open_sell(symbol, price, strategy)
 
         except Exception as e:
-            print(f"⚠️ Error {symbol}: {e}")
+            print(f"⚠️ Erreur {symbol}: {e}")
 
 
 # -----------------------------
 # BUY
 # -----------------------------
-def open_buy(symbol: str, price: float):
+def open_buy(symbol, price, strategy):
+    global current_positions
 
     balance = get_account_balance()["available"]
 
-    risk_usdt = min(
-        balance * config.RISK_PER_TRADE,
-        config.MAX_TRADE_USDT,
-        balance
-    )
+    qty = min(balance * config.RISK_PER_TRADE, config.MAX_TRADE_USDT)
 
-    order = place_market_order(symbol, SIDE_BUY, risk_usdt)
+    place_market_order(symbol, SIDE_BUY, qty)
 
-    if order is None:
-        print("❌ BUY ORDER FAILED")
-        return
+    # TP / SL
+    if strategy == "SCALPING":
+        sl = price * (1 - config.SCALP_SL)
+        tp = price * (1 + config.SCALP_TP)
+    else:
+        sl = price * (1 - config.STOP_LOSS_PCT)
+        tp = price * (1 + config.TAKE_PROFIT_PCT)
 
-    qty = risk_usdt / price
-
-    position = {
+    pos = {
         "entry": price,
         "quantity": qty,
-        "type": "BUY",
-        "stop_loss": price * (1 - config.STOP_LOSS_PCT),
-        "take_profit": price * (1 + config.TAKE_PROFIT_PCT)
+        "stop_loss": round(sl, 2),
+        "take_profit": round(tp, 2),
+        "type": "BUY"
     }
 
-    current_positions.setdefault(symbol, []).append(position)
+    current_positions.setdefault(symbol, []).append(pos)
 
-    open_position(symbol, price, risk_usdt,
-                 position["stop_loss"], position["take_profit"])
+    open_position(symbol, price, qty, sl, tp)
 
-    print(f"🟢 BUY {symbol} | qty={qty:.6f} | {price:.2f}")
+    print(f"🟢 BUY {symbol} @ {price:.2f}")
 
 
 # -----------------------------
 # SELL
 # -----------------------------
-def open_sell(symbol: str, price: float):
+def open_sell(symbol, price, strategy):
+    global current_positions
 
     balance = get_account_balance()["available"]
 
-    risk_usdt = min(
-        balance * config.RISK_PER_TRADE,
-        config.MAX_TRADE_USDT,
-        balance
-    )
+    qty = min(balance * config.RISK_PER_TRADE, config.MAX_TRADE_USDT)
 
-    order = place_market_order(symbol, SIDE_SELL, risk_usdt)
+    place_market_order(symbol, SIDE_SELL, qty)
 
-    if order is None:
-        print("❌ SELL ORDER FAILED")
-        return
+    if strategy == "SCALPING":
+        sl = price * (1 + config.SCALP_SL)
+        tp = price * (1 - config.SCALP_TP)
+    else:
+        sl = price * (1 + config.STOP_LOSS_PCT)
+        tp = price * (1 - config.TAKE_PROFIT_PCT)
 
-    qty = risk_usdt / price
-
-    position = {
+    pos = {
         "entry": price,
         "quantity": qty,
-        "type": "SELL",
-        "stop_loss": price * (1 + config.STOP_LOSS_PCT),
-        "take_profit": price * (1 - config.TAKE_PROFIT_PCT)
+        "stop_loss": round(sl, 2),
+        "take_profit": round(tp, 2),
+        "type": "SELL"
     }
 
-    current_positions.setdefault(symbol, []).append(position)
+    current_positions.setdefault(symbol, []).append(pos)
 
-    open_position(symbol, price, risk_usdt,
-                 position["stop_loss"], position["take_profit"])
+    open_position(symbol, price, qty, sl, tp)
 
-    print(f"🔴 SELL {symbol} | qty={qty:.6f} | {price:.2f}")
+    print(f"🔻 SELL {symbol} @ {price:.2f}")
 
 
 # -----------------------------
-# EXIT
+# EXIT LOGIC
 # -----------------------------
-def check_exit(symbol: str, price: float):
+def check_exit(symbol, price):
 
     if symbol not in current_positions:
         return
 
-    positions = current_positions[symbol]
+    for pos in current_positions[symbol][:]:
 
-    for pos in positions[:]:
+        pos_type = pos.get("type", "BUY")   # ✅ FIX BUG 'type'
+        entry = pos["entry"]
 
-        qty = pos["quantity"]
-        side = pos["type"]
-
-        if side == "BUY":
-
+        if pos_type == "BUY":
             if price <= pos["stop_loss"]:
-                print(f"❌ SL BUY {symbol}")
-                place_market_order(symbol, SIDE_SELL, qty * price)
-                close_position(price, "STOP LOSS", symbol)
-                positions.remove(pos)
-                continue
+                place_market_order(symbol, SIDE_SELL, pos["quantity"])
+                close_position(price, symbol=symbol, reason="SL")
+                current_positions[symbol].remove(pos)
 
-            if price >= pos["take_profit"]:
-                print(f"💰 TP BUY {symbol}")
-                place_market_order(symbol, SIDE_SELL, qty * price)
-                close_position(price, "TAKE PROFIT", symbol)
-                positions.remove(pos)
-                continue
+            elif price >= pos["take_profit"]:
+                place_market_order(symbol, SIDE_SELL, pos["quantity"])
+                close_position(price, symbol=symbol, reason="TP")
+                current_positions[symbol].remove(pos)
 
-        else:
-
+        else:  # SELL
             if price >= pos["stop_loss"]:
-                print(f"❌ SL SELL {symbol}")
-                place_market_order(symbol, SIDE_BUY, qty * price)
-                close_position(price, "STOP LOSS", symbol)
-                positions.remove(pos)
-                continue
+                place_market_order(symbol, SIDE_BUY, pos["quantity"])
+                close_position(price, symbol=symbol, reason="SL")
+                current_positions[symbol].remove(pos)
 
-            if price <= pos["take_profit"]:
-                print(f"💰 TP SELL {symbol}")
-                place_market_order(symbol, SIDE_BUY, qty * price)
-                close_position(price, "TAKE PROFIT", symbol)
-                positions.remove(pos)
-                continue
+            elif price <= pos["take_profit"]:
+                place_market_order(symbol, SIDE_BUY, pos["quantity"])
+                close_position(price, symbol=symbol, reason="TP")
+                current_positions[symbol].remove(pos)
 
-    if len(positions) == 0:
+    if symbol in current_positions and len(current_positions[symbol]) == 0:
         del current_positions[symbol]

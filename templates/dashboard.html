@@ -3,14 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>MBTrader Dashboard</title>
-
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- (OPTIONNEL PRO) Chart.js pour futur graphique -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
 
 <div class="container">
@@ -19,16 +14,14 @@
         <h1>MBTrader <span class="badge">TESTNET</span></h1>
     </header>
 
-    <!-- ================= BALANCE ================= -->
+    <!-- BALANCE -->
     <div class="card">
         <h2><i class="fas fa-wallet"></i> Solde du Compte</h2>
-
         <div class="balance">
             <div class="balance-box">
                 <p>Disponible</p>
                 <span id="balance-available">0</span> USDT
             </div>
-
             <div class="balance-box">
                 <p>Bloqué</p>
                 <span id="balance-locked">0</span> USDT
@@ -36,21 +29,16 @@
         </div>
     </div>
 
-    <!-- ================= BOT STATUS ================= -->
+    <!-- BOT STATUS -->
     <div class="card">
         <h2><i class="fas fa-robot"></i> Trade Automatique</h2>
-
         <p id="bot-status" class="status">Chargement...</p>
-
-        <button class="btn-toggle" onclick="toggleTrade()">
-            ON / OFF
-        </button>
+        <button class="btn-toggle" onclick="toggleTrade()">ON / OFF</button>
     </div>
 
-    <!-- ================= PERFORMANCE PRO ================= -->
-
+    <!-- PERFORMANCE -->
     <div class="card stats-card">
-        <h2><i class="fas fa-chart-line"></i> Performance Globale</h2>
+        <h2><i class="fas fa-chart-line"></i> Performance</h2>
 
         <div class="stats">
 
@@ -63,25 +51,16 @@
                 <p>PnL Total</p>
                 <span id="total-pnl">0</span> USDT
             </div>
-
-            <!-- 🔥 AJOUT PRO -->
+            
             <div class="stat-box">
-                <p>Winrate</p>
-                <span id="winrate">0</span> %
+                <p>PnL Moyen / Trade</p>
+                <span id="avg-pnl">0</span> USDT
             </div>
-
         </div>
-        
+
     </div>
 
-    <!-- ================= GRAPH (OPTION PRO) ================= -->
-    <div class="card">
-        <h2><i class="fas fa-chart-area"></i> Évolution du Capital</h2>
-
-        <canvas id="equityChart"></canvas>
-    </div>
-
-    <!-- ================= POSITIONS ================= -->
+    <!-- POSITIONS OUVERTES -->
     <div class="card">
         <h2><i class="fas fa-coins"></i> Positions Ouvertes</h2>
 
@@ -98,29 +77,28 @@
                         <th>PnL</th>
                     </tr>
                 </thead>
-
                 <tbody id="positions-open"></tbody>
             </table>
         </div>
     </div>
 
-    <!-- ================= HISTORY ================= -->
+    <!-- TRADE HISTORY -->
     <div class="card">
         <h2><i class="fas fa-history"></i> Derniers Trades</h2>
-
         <div class="table-wrapper">
             <table>
                 <thead>
                     <tr>
                         <th>Heure</th>
                         <th>Action</th>
+                        <th>Type</th>
                         <th>Entrée</th>
                         <th>Sortie</th>
                         <th>PnL</th>
                         <th>Status</th>
+
                     </tr>
                 </thead>
-
                 <tbody id="trade-history"></tbody>
             </table>
         </div>
@@ -129,6 +107,5 @@
 </div>
 
 <script src="/static/dashboard.js"></script>
-
 </body>
 </html>

@@ -1,126 +1,90 @@
 from datetime import datetime
-from database import db, Trade
 
-# -----------------------------
-# MEMORY STORAGE
-# -----------------------------
 trade_history = []
-total_pnl = {}
-
-# 🔹 FIX IMPORTANT: multi-trades support
-open_trades = {}  # symbol -> list of trades
-
+total_pnl = {
+    "realized": 0.0
+}
+open_trades = {}
 
 # -----------------------------
-# OPEN POSITION
+# Ouvrir une position
 # -----------------------------
-def open_position(symbol, price, quantity, stop_loss, take_profit, trade_type="BUY"):
+def open_position(symbol: str, price: float, quantity: float = 1.0,
+                  stop_loss: float = None, take_profit: float = None,
+                  trade_type: str = "BUY"):
 
-    trade_data = {
+    open_trades[symbol] = {
         "symbol": symbol,
         "entry": price,
         "quantity": quantity,
         "stop_loss": stop_loss,
         "take_profit": take_profit,
-        "type": trade_type,
-        "time_open": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        "type": trade_type,   # ✅ FIX IMPORTANT
+        "time_open": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-    # 🔹 support multi positions
-    open_trades.setdefault(symbol, []).append(trade_data)
-
-    # 🔹 DB
-    trade = Trade(
-        symbol=symbol,
-        type=trade_type,
-        entry_price=price,
-        quantity=quantity,
-        status="OPEN",
-        timestamp=datetime.utcnow()
-    )
-
-    db.session.add(trade)
-    db.session.commit()
-
-    print(f"🟢 OPEN {trade_type} {symbol} @ {price}")
-
+    print(f"🟢 {trade_type} ouvert: {symbol} à {price} | Qty: {quantity}")
 
 # -----------------------------
-# CLOSE POSITION
+# Fermer une position
 # -----------------------------
-def close_position(price: float, reason: str = "CLOSE", symbol: str = None):
+def close_position(price: float, reason: str = "SELL", symbol: str = None):
 
-    if symbol is None or symbol not in open_trades or len(open_trades[symbol]) == 0:
-        print("❌ No open position")
+    if symbol is None or symbol not in open_trades:
+        print("❌ Aucune position ouverte")
         return
 
-    # 🔹 take LAST position (safe FIFO logic)
-    trade_mem = open_trades[symbol].pop(0)
+    trade = open_trades[symbol]
 
-    # -----------------------------
-    # PnL CALCULATION
-    # -----------------------------
-    if trade_mem["type"] == "BUY":
-        pnl = (price - trade_mem["entry"]) * trade_mem["quantity"]
+    if trade.get("type", "BUY") == "BUY":
+        pnl = (price - trade["entry"]) * trade["quantity"]
     else:
-        pnl = (trade_mem["entry"] - price) * trade_mem["quantity"]
+        pnl = (trade["entry"] - price) * trade["quantity"]
 
-    # -----------------------------
-    # DB FIX (avoid wrong trade selection)
-    # -----------------------------
-    trade_db = Trade.query.filter_by(
-        symbol=symbol,
-        status="OPEN"
-    ).order_by(Trade.timestamp.asc()).first()
-
-    if trade_db:
-        trade_db.exit_price = price
-        trade_db.profit = pnl
-        trade_db.status = "CLOSED"
-        db.session.commit()
-
-    # -----------------------------
-    # HISTORY
-    # -----------------------------
-    record = {
+    trade_record = {
         "symbol": symbol,
-        "entry": trade_mem["entry"],
+        "entry": trade["entry"],
         "exit": price,
-        "quantity": trade_mem["quantity"],
+        "quantity": trade["quantity"],
         "pnl": round(pnl, 2),
-        "time_open": trade_mem["time_open"],
-        "time_close": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "time_open": trade["time_open"],
+        "time_close": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "reason": reason,
-        "type": trade_mem["type"]
+        "action": trade["type"],
+        "type": trade["type"]   # ✅ FIX FRONTEND COMPAT
     }
 
-    trade_history.append(record)
+    trade_history.append(trade_record)
 
-    # -----------------------------
-    # TOTAL PNL
-    # -----------------------------
-    total_pnl[symbol] = total_pnl.get(symbol, 0) + pnl
+    total_pnl["realized"] += pnl
 
-    print(f"🔴 CLOSE {trade_mem['type']} {symbol} | PnL={round(pnl,2)}")
+    print(f"🔴 {trade['type']} {symbol} PnL: {round(pnl,2)}")
 
-    # cleanup empty
-    if len(open_trades[symbol]) == 0:
-        del open_trades[symbol]
+    del open_trades[symbol]
 
 
-# -----------------------------
-# HISTORY
-# -----------------------------
 def get_history(symbol: str = None):
     if symbol:
         return [t for t in trade_history if t["symbol"] == symbol]
     return trade_history
 
 
-# -----------------------------
-# PNL
-# -----------------------------
-def get_total_pnl(symbol: str = None):
-    if symbol:
-        return round(total_pnl.get(symbol, 0.0), 2)
-    return {s: round(p, 2) for s, p in total_pnl.items()}
+def get_total_pnl():
+    return {
+        "realized": round(total_pnl.get("realized", 0.0), 2)
+    }
+
+
+def get_trade_stats():
+    total = len(trade_history)
+    wins = len([t for t in trade_history if t["pnl"] > 0])
+    losses = total - wins
+
+    avg = total_pnl.get("realized", 0.0) / total if total > 0 else 0
+
+    return {
+        "total_trades": total,
+        "wins": wins,
+        "losses": losses,
+        "avg_pnl": round(avg, 2)
+    }

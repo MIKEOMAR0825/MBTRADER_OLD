@@ -20,16 +20,15 @@ function updateBotStatus(forceState = null) {
             const running = forceState !== null ? forceState : data.running;
             document.getElementById("bot-status").innerText = running ? "🟢 ACTIF" : "🔴 ARRÊTÉ";
 
-            // Solde
+            // Solde disponible et bloqué
             document.getElementById("balance-available").innerText = data.balance.available.toFixed(2);
             document.getElementById("balance-locked").innerText = data.balance.locked.toFixed(2);
 
-            // PnL global (réel + ouvert)
-            const pnlElement = document.getElementById("total-pnl");
-            pnlElement.innerText = data.pnl.total.toFixed(2);
+            // PnL
+            document.getElementById("total-pnl").innerText = data.pnl.total.toFixed(2);
 
-            pnlElement.className = data.pnl.total >= 0 ? "green" : "red";
-
+            const avg = total_trades > 0 ? total_pnl / total_trades : 0;
+            document.getElementById("avg-pnl").innerText = avg.toFixed(2);
         })
         .catch(err => console.error("Erreur updateBotStatus:", err));
 }
@@ -46,21 +45,34 @@ function updateTradeHistory() {
 
             data.forEach(trade => {
                 const row = document.createElement("tr");
+                const pnl = Number(trade.pnl ?? 0);
 
                 row.innerHTML = `
                     <td>${trade.time_open ?? "-"}</td>
                     <td>${trade.action ?? "-"}</td>
+                    <td>${trade.type ?? "-"}</td>
                     <td>${trade.entry ?? "-"}</td>
                     <td>${trade.exit ?? (trade.status === "OPEN" ? "En cours" : "-")}</td>
-                    <td class="${trade.pnl >= 0 ? "green" : "red"}">
-                        ${trade.pnl !== undefined ? trade.pnl.toFixed(2) : "-"}
-                    </td>
+                    <td class="${pnl >= 0 ? "green" : "red"}">${pnl.toFixed(2)}</td>
                     <td>${trade.status}</td>
                 `;
-
                 table.appendChild(row);
             });
 
+            // 🔥 IMPORTANT : uniquement CLOSED trades
+            const closedTrades = data.filter(t => t.status === "CLOSED");
+
+            const total_pnl = closedTrades.reduce((acc, t) => {
+                return acc + Number(t.pnl ?? 0);
+            }, 0);
+
+            const avg_pnl = closedTrades.length > 0
+                ? total_pnl / closedTrades.length
+                : 0;
+
+            document.getElementById("total-trades").innerText = closedTrades.length;
+            document.getElementById("total-pnl").innerText = total_pnl.toFixed(2);
+            document.getElementById("avg-pnl").innerText = avg_pnl.toFixed(2);
         })
         .catch(err => console.error("Erreur updateTradeHistory:", err));
 }
@@ -78,6 +90,7 @@ async function updatePositions() {
 
         data.forEach(pos => {
             const row = document.createElement("tr");
+            const pnl = Number(pos.pnl ?? 0);
 
             row.innerHTML = `
                 <td>${pos.symbol}</td>
@@ -86,37 +99,15 @@ async function updatePositions() {
                 <td>${pos.stop_loss ?? "-"}</td>
                 <td>${pos.take_profit ?? "-"}</td>
                 <td>${pos.type}</td>
-                <td class="${pos.pnl >= 0 ? "green" : "red"}">
-                    ${pos.pnl !== undefined ? pos.pnl.toFixed(2) : "-"}
-                </td>
-            `;
+                <td class="${pnl >= 0 ? "green" : "red"}">
+                    ${pnl.toFixed(2)} USDT
+                </td>            
+                `;
 
             tbody.appendChild(row);
         });
-
     } catch (err) {
         console.error("Erreur updatePositions:", err);
-    }
-}
-
-// -----------------------------
-// STATS PRO (Winrate, PnL réel)
-// -----------------------------
-async function updateStats() {
-    try {
-        const res = await fetch("/pnl");
-        const data = await res.json();
-
-        // Total trades (fermés uniquement)
-        document.getElementById("total-trades").innerText = data.total_trades;
-
-        // PnL réel (fermés uniquement)
-        const pnlElement = document.getElementById("total-pnl");
-        pnlElement.innerText = data.total_pnl.toFixed(2);
-        pnlElement.className = data.total_pnl >= 0 ? "green" : "red";
-
-    } catch (err) {
-        console.error("Erreur updateStats:", err);
     }
 }
 
@@ -127,7 +118,6 @@ function autoRefresh() {
     updateBotStatus();
     updateTradeHistory();
     updatePositions();
-    updateStats(); // 🔥 important
 }
 
 // -----------------------------

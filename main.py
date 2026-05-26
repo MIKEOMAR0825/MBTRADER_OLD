@@ -8,16 +8,7 @@ from bot.logger import get_history, get_total_pnl
 from services.binance_client import get_account_balance
 from services.market_data import get_latest_prices
 
-from database import db
-
 app = Flask(__name__)
-
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///trades.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db.init_app(app)
-
 
 SECRET_KEY = "12345"
 
@@ -27,17 +18,6 @@ def check_auth(req) -> bool:
     """
     return req.headers.get("X-API-KEY") == SECRET_KEY
 
-
-def safe_price(symbol):
-    try:
-        df = get_latest_prices(symbol)
-        if df is None or df.empty:
-            return 0.0
-        return float(df.iloc[-1])
-    except:
-        return 0.0
-    
-    
 # -----------------------------
 # État du bot
 # -----------------------------
@@ -104,39 +84,35 @@ from bot.logger import get_total_pnl
 
 @app.route("/bot_status")
 def bot_status():
-
+    # 1️⃣ Solde
     balance_data = get_account_balance()
     balance = {
         "available": balance_data.get("available", 0.0),
         "locked": balance_data.get("locked", 0.0)
     }
 
-    total_pnl_dict = get_total_pnl()
+    # 2️⃣ PnL total réalisé
+    total_pnl_dict = get_total_pnl()  # maintenant c'est directement un dict
 
+    # 3️⃣ PnL non réalisé pour positions ouvertes
     unrealized_pnl = 0.0
-
     from bot.logger import open_trades
-
     for trade in list(open_trades.values()):
         symbol = trade["symbol"]
         entry = trade["entry"]
         qty = trade["quantity"]
-
-        price = safe_price(symbol)
-
-        if price == 0:
-            continue
-
+        current_price = get_latest_prices(symbol).iloc[-1]
         if trade.get("type", "BUY") == "BUY":
-            pnl = (price - entry) * qty
+            pnl = (current_price - entry) * qty
         else:
-            pnl = (entry - price) * qty
-
+            pnl = (entry - current_price) * qty
         unrealized_pnl += pnl
 
+    # 4️⃣ Somme du PnL total
     total_realized = sum(total_pnl_dict.values())
-    equity = balance["available"] + total_realized + unrealized_pnl
+    total_value = total_realized + unrealized_pnl
 
+    # 5️⃣ JSON à retourner
     return jsonify({
         "running": BOT_STATE["running"],
         "auto_trading": config.AUTO_TRADING,
@@ -144,12 +120,10 @@ def bot_status():
         "pnl": {
             "realized": round(total_realized, 2),
             "unrealized": round(unrealized_pnl, 2),
-            "total": round(total_realized + unrealized_pnl, 2),
-            "equity": round(equity, 2)
+            "total": round(total_value, 2)
         }
-    })
-
-
+    })    
+        
 # -----------------------------
 # Historique des trades
 # -----------------------------
@@ -158,46 +132,16 @@ def trades():
     history = get_history()
     return jsonify(history)
 
-
-
-from database import Trade
-
 @app.route("/pnl")
-
 def pnl():
-    trades = Trade.query.filter_by(status="CLOSED").all()
-
-    profits = [t.profit for t in trades if t.profit is not None]
-
-    wins = [p for p in profits if p > 0]
-    losses = [p for p in profits if p < 0]
-
-    total = len(profits)
-    total_pnl = sum(profits)
-
-    winrate = (len(wins) / total * 100) if total > 0 else 0
-
-    avg_win = sum(wins) / len(wins) if wins else 0
-    avg_loss = sum(losses) / len(losses) if losses else 0
-
-    # 📈 equity curve
-    equity = []
-    balance = 0
-    for p in profits:
-        balance += p
-        equity.append(round(balance, 2))
-
+    history = get_history()
     return jsonify({
-        "total_pnl": round(total_pnl, 2),
-        "total_trades": total,
-        "wins": len(wins),
-        "losses": len(losses),
-        "winrate": round(winrate, 2),
-        "avg_win": round(avg_win, 2),
-        "avg_loss": round(avg_loss, 2),
-        "equity": equity
+        "total_pnl": sum([t["pnl"] for t in history]),
+        "total_trades": len(history),
+        "wins": len([t for t in history if t["pnl"] > 0]),
+        "losses": len([t for t in history if t["pnl"] < 0]),
+        "history": history[-10:]  # derniers 10 trades
     })
-    
     
 # -----------------------------
 # Solde
@@ -212,12 +156,14 @@ def balance():
     
     
 from bot.logger import trade_history, open_trades
+from services.market_data import get_latest_prices
 
 @app.route("/all_trades")
 def all_trades():
+
     all_trades_list = []
 
-    # 🔹 Trades fermés
+    # CLOSED TRADES
     for t in trade_history:
         all_trades_list.append({
             "symbol": t["symbol"],
@@ -231,15 +177,10 @@ def all_trades():
             "status": "CLOSED"
         })
 
-    # 🔹 Trades ouverts
+    # OPEN TRADES (FIXED)
     for symbol, trade in open_trades.items():
 
-        df = get_latest_prices(symbol)
-
-        if df is None or df.empty:
-            continue
-
-        current_price = float(df.iloc[-1])
+        current_price = get_latest_prices(symbol).iloc[-1]
         trade_type = trade.get("type", "BUY")
 
         if trade_type == "BUY":
@@ -259,15 +200,14 @@ def all_trades():
             "status": "OPEN"
         })
 
-    # 🔹 tri
-    all_trades_list.sort(key=lambda x: x["time_open"], reverse=True)
+    all_trades_list.sort(
+        key=lambda x: x.get("time_open", ""),
+        reverse=True
+    )
 
     return jsonify(all_trades_list[:20])
-
+    
 # app.py ou routes.py
-
-
-
 
 from flask import jsonify
 from bot.trader import current_positions
@@ -275,21 +215,17 @@ from services.market_data import get_latest_prices
 
 @app.route("/dashboard_data")
 def dashboard_data():
-
     positions_data = []
 
-    for symbol, trades in list(current_positions.items()):
-
-        price = safe_price(symbol)
+    for symbol, trades in list(current_positions.items()):  # trades = liste de positions
+        current_price = get_latest_prices(symbol).iloc[-1]  # prix actuel
 
         for trade in trades:
-
-            if price == 0:
-                pnl = 0
-            elif trade["type"] == "BUY":
-                pnl = (price - trade["entry"]) * trade["quantity"]
-            else:
-                pnl = (trade["entry"] - price) * trade["quantity"]
+            # calcul du PnL en temps réel
+            if trade["type"] == "BUY":
+                pnl = (current_price - trade["entry"]) * trade["quantity"]
+            else:  # SELL
+                pnl = (trade["entry"] - current_price) * trade["quantity"]
 
             positions_data.append({
                 "symbol": symbol,
@@ -303,9 +239,6 @@ def dashboard_data():
 
     return jsonify(positions_data)
 
-
-with app.app_context():
-    db.create_all()
 
 # -----------------------------
 # Lancer Flask

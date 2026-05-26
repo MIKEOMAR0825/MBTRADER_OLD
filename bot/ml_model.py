@@ -4,71 +4,55 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 # -----------------------------
-# DATASET BUILD
+# Préparer les données
 # -----------------------------
-def prepare_data(df: pd.DataFrame, n_future: int = 5, threshold: float = 0.002) -> pd.DataFrame:
-
+def prepare_data(df: pd.DataFrame, n_future: int = 5) -> pd.DataFrame:
+    """
+    Ajoute RSI, EMA, MACD et crée la colonne target pour prédiction
+    """
     df = df.copy()
+    df['rsi'] = calculate_rsi_series(df['close'])
+    df['ema'] = calculate_ema(df['close'])
+    
+    macd, signal = calculate_macd(df['close'])
+    df['macd'] = macd
+    df['macd_signal'] = signal
 
-    df["rsi"] = calculate_rsi_series(df["close"])
-    df["ema"] = calculate_ema(df["close"])
+    # Target sur n_future bougies
+    df['future'] = df['close'].shift(-n_future)
 
-    macd, signal = calculate_macd(df["close"])
-    df["macd"] = macd
-    df["macd_signal"] = signal
-
-    # -----------------------------
-    # future return (important)
-    # -----------------------------
-    df["future"] = df["close"].shift(-n_future)
-
-    df["return"] = (df["future"] - df["close"]) / df["close"]
-
-    # -----------------------------
-    # LABEL PRO (avec seuil)
-    # -----------------------------
     def label(row):
-        if row["return"] > threshold:
+        if row['future'] > row['close']:
             return 1   # BUY
-        elif row["return"] < -threshold:
+        elif row['future'] < row['close']:
             return -1  # SELL
         return 0       # HOLD
 
-    df["target"] = df.apply(label, axis=1)
-
-    # 🔥 important: enlever bruit extrême
-    df = df.dropna()
-
-    return df
-
+    df['target'] = df.apply(label, axis=1)
+    return df.dropna()
 
 # -----------------------------
-# TRAIN MODEL
+# Entraîner le modèle
 # -----------------------------
-def train_model(df: pd.DataFrame):
-
-    features = ["rsi", "macd", "macd_signal", "ema"]
-
+def train_model(df: pd.DataFrame) -> RandomForestClassifier:
+    """
+    Entraîne un RandomForestClassifier sur les features RSI, EMA, MACD
+    """
+    features = ['rsi', 'macd', 'macd_signal', 'ema']
     X = df[features]
-    y = df["target"]
+    y = df['target']
 
-    # 🔥 split temporel correct
-    split = int(len(df) * 0.8)
-
-    X_train, X_test = X.iloc[:split], X.iloc[split:]
-    y_train, y_test = y.iloc[:split], y.iloc[split:]
+    # Split train/test pour évaluer la performance
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
     model = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=6,
-        random_state=42,
-        class_weight="balanced"
+        n_estimators=200,
+        max_depth=5,
+        random_state=42
     )
-
     model.fit(X_train, y_train)
 
     acc = model.score(X_test, y_test)
-
-    print(f"✅ Model trained | Accuracy: {acc:.2f}")
+    print(f"✅ RandomForest entraîné | Accuracy: {acc:.2f}")
 
     return model

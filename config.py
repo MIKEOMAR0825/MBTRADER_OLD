@@ -8,7 +8,7 @@ BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 
-SYMBOLS = ["BTCUSDT", "AVAXUSDT", "XRPUSDT", "SOLUSDT", "ETHUSDT", "BNBUSDT", "LINKUSDT", "INJUSDT", "DOGEUSDT"]  # ajoute ici d'autres symboles
+SYMBOLS = ["BTCUSDT", "AVAXUSDT", "XRPUSDT", "SOLUSDT", "ETHUSDT", "BNBUSDT"]  # ajoute ici d'autres symboles
 
 
 # 🧪 ENVIRONNEMENT
